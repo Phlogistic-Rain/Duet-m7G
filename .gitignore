@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+
+# datasets and pretrained weights are downloaded, not tracked
+data/
+data_ac4c/
+pretrained/
+
+# training artefacts
+models_log/
+runs/
+*.pth
