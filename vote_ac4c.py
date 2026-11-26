@@ -114,8 +114,8 @@ def main():
     parser = argparse.ArgumentParser(description='Five-fold ensemble evaluation on the ac4C benchmark')
     parser.add_argument('--base_dir', type=str, default=None,
                         help='Root directory of a five-fold run (holding subdirectories 1..5); defaults to the most recent one.')
-    parser.add_argument('--mode', type=str, default='test', choices=['val', 'test'],
-                        help='Evaluation set: test (default; the hold-out shared by all folds) or val.')
+    parser.add_argument('--mode', type=str, default='test', choices=['test'],
+                        help='Evaluation set: test (the hold-out shared by all folds).')
     args = parser.parse_args()
 
     base_dir = args.base_dir or latest_base_dir()
@@ -157,13 +157,8 @@ def main():
         return (f"ACC={m['acc']:.4f} | PRE={m['pre']:.4f} | Recall={m['recall']:.4f} | "
                 f"F1={m['f1']:.4f} | MCC={m['mcc']:.4f}")
 
-    print(f"\n[strategy 1: logits averaging]\n" + '-' * 60 + f"\n  {fmt(m_logits)}")
-    print(f"\n[strategy 2: probability averaging]\n" + '-' * 60 + f"\n  {fmt(m_probs)}")
-
-    best = 'Logits' if m_logits['mcc'] >= m_probs['mcc'] else 'Probs'
-    print(f"\n[conclusion] better strategy: {best} averaging "
-          f"(MCC {max(m_logits['mcc'], m_probs['mcc']):.4f}) | "
-          f"single-model mean {np.mean(single_test_mccs):.4f}")
+    print(f"\n[ensemble: logits averaging]\n" + '-' * 60 + f"\n  {fmt(m_logits)}")
+    print(f"\n[diagnostic, not reported: probability averaging]\n" + '-' * 60 + f"\n  {fmt(m_probs)}")
 
     out = {
         'base_dir': base_dir,
@@ -174,7 +169,6 @@ def main():
         'single_test_mcc_std': float(np.std(single_test_mccs)),
         'ensemble_logits': m_logits,
         'ensemble_probs': m_probs,
-        'best_strategy': best,
     }
     out_path = os.path.join(base_dir, f'vote_result_{args.mode}.json')
     with open(out_path, 'w', encoding='utf-8') as f:

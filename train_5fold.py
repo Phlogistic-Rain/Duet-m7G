@@ -334,19 +334,26 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=None,
                         help='Override N_epochs (for a smoke test).')
     parser.add_argument('--end_fold', type=int, default=N_FOLDS,
-                        help='Last fold to train (for a smoke test).')
+                        help='Last fold to train (for a smoke test, or equal to --start_fold to train one fold).')
+    parser.add_argument('--window', type=int, default=window_size,
+                        help='Length of the centered input window (501 by default; 201 for the input-window comparison).')
+    parser.add_argument('--log_root', type=str, default='models_log',
+                        help='Root directory for run outputs.')
     cli = parser.parse_args()
 
     if cli.epochs:
         N_epochs = cli.epochs
     if cli.bert_depth != 1:
         name = f'{name}_bertdepth{cli.bert_depth}'
+    if cli.window != window_size:
+        window_size = cli.window
+        name = f'{name}_win{window_size}'
 
     _run_t0 = time.time()
     torch.cuda.set_device(0)
     alog('RUN_START', task=name, seed=SEED, n_folds=N_FOLDS, start_fold=cli.start_fold,
          compile=bool(cli.compile), bert_depth=cli.bert_depth, patience=cli.patience,
-         n_epochs=N_epochs)
+         n_epochs=N_epochs, window=window_size)
 
     p_dict = {
         'seed': SEED,
@@ -374,7 +381,7 @@ if __name__ == '__main__':
         alog('RESUME', root_dir=root_dir, start_fold=cli.start_fold)
     else:
         cur_time = get_cur_time()
-        root_dir = os.path.join('models_log', name, cur_time)
+        root_dir = os.path.join(cli.log_root, name, cur_time)
     os.makedirs(root_dir, exist_ok=True)
 
     import fm

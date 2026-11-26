@@ -36,8 +36,22 @@ def ts():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
+def rank():
+    """Process rank in a distributed run (0 when not distributed); only rank 0 logs."""
+    for k in ('RANK', 'SLURM_PROCID', 'LOCAL_RANK'):
+        v = os.environ.get(k, '').strip()
+        if v:
+            try:
+                return int(v)
+            except ValueError:
+                return 0
+    return 0
+
+
 def alog(tag, msg='', **kv):
     """Print one event line: [YYYY-MM-DD HH:MM:SS][TAG] msg k=v ... (flushed immediately)."""
+    if rank() != 0:
+        return
     parts = [f'[{ts()}][{tag}]']
     if msg:
         parts.append(str(msg))
@@ -91,6 +105,67 @@ class Heartbeat:
         if self.total and rate > 0:
             kv['eta_ep'] = fmt_elapsed((self.total - done) / rate)
         alog(self.tag, **kv)
+
+
+class Progress:
+    """Coarse progress and ETA over a series of units (for example folds), printed as event lines."""
+
+    def __init__(self, total, key='series', done=0, interval=60.0, tag='PROGRESS'):
+        self.total, self.key, self.n, self.interval, self.tag = int(total), key, int(done), interval, tag
+        self.durs = []
+        self.t_unit = None
+        self.ctx = {}
+        self.last = 0.0
+        self.stepped = False
+
+    def start(self, step=None, **ctx):
+        self.t_unit, self.ctx = time.time(), ctx
+        if step is not None:
+            self.ctx, self.stepped = {'step': step, **ctx}, True
+            alog('STEP_START', **self._ctx({}))
+
+    def skip(self, step=None, **ctx):
+        self.t_unit = None
+        self.n = min(self.n + 1, self.total)
+        if step is None:
+            return
+        self.ctx, self.stepped = {'step': step, **ctx}, True
+        alog('SKIP', **self._ctx({}))
+        self._emit()
+
+    def _ctx(self, kv):
+        return {(f'{k}_' if k in kv or k in ('tag', 'msg') else k): v for k, v in self.ctx.items()}
+
+    def _emit(self):
+        now = time.time()
+        self.last = now
+        cur = now - self.t_unit if self.t_unit is not None else 0.0
+        kv = {}
+        mean = sum(self.durs) / len(self.durs) if self.durs else 0.0
+        if mean > 0:
+            a = self.n + (min(cur / mean, 0.95) if self.t_unit is not None and self.n < self.total else 0.0)
+            left = max(0, self.total - self.n - (1 if self.t_unit is not None else 0))
+            eta = left * mean + (max(mean - cur, 0.0) if self.t_unit is not None else 0.0)
+            kv[self.key] = f'{a:.2f}/{self.total}' if a != int(a) else f'{int(a)}/{self.total}'
+            if not self.stepped:
+                kv['eta_s'] = int(round(eta))
+                kv['unit_s'] = int(round(mean))
+        else:
+            kv[self.key] = f'{self.n}/{self.total}'
+        alog(self.tag, **kv, **self._ctx(kv))
+
+    def tick(self):
+        if self.interval > 0 and time.time() - self.last >= self.interval:
+            self._emit()
+
+    def done(self, **ctx):
+        d = time.time() - self.t_unit if self.t_unit is not None else 0.0
+        if d > 0:
+            self.durs.append(d)
+        self.n = min(self.n + 1, self.total)
+        self.t_unit = None
+        self.ctx.update(ctx)
+        self._emit()
 
 
 def suppress_hf_noise():

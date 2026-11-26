@@ -10,8 +10,8 @@ single vector with a learnable attention pooling layer, whose per-position
 weights are the hook used for interpretability. The two vectors are
 concatenated and classified by a high-capacity nonlinear head.
 
-The same architecture transfers to N4-acetylcytidine (ac4C) site prediction
-without changes other than the window size.
+The same architecture is reused for N4-acetylcytidine (ac4C) site prediction,
+trained separately with no change other than the window size.
 
 ## Results
 
@@ -21,7 +21,7 @@ Independent test set (2,194 sequences), five-fold ensemble by logits averaging:
 |---|---|---|---|---|
 | 0.8997 | 0.8678 | 0.9316 | 0.8011 | 0.9646 |
 
-Individual folds reach a test MCC of 0.7829 ± 0.0047, so the ensemble adds
+Individual folds reach a test MCC of 0.7829 ± 0.0053 (sample s.d.), so the ensemble adds
 about 0.018 MCC over a single fold.
 
 ## Installation
@@ -91,15 +91,17 @@ Useful flags:
 | `--start_fold N` / `--root_dir DIR` | Resume a run; finished folds are reused. |
 | `--bert_depth N` | Final DNABERT layers left trainable (1 = default, 0 = frozen). |
 | `--patience N` | Early stopping (0 = run all epochs). |
+| `--window N` | Length of the centered input window (501 by default; 201 for the input-window comparison). m7G script only. |
 | `--compile 0` | Disable `torch.compile`. |
 
 The ac4C experiment is the same pair of commands with `train_5fold_ac4c.py` and
 `vote_ac4c.py`, which use a 201-nt window and write to
 `models_log/duet_ac4c_5fold/`.
 
-Training is not bit-wise reproducible: cuDNN autotuning and non-deterministic
-backward reductions move a single fold's test MCC by about 0.005 (s.d.) between
-identical runs. Compare arms within one run where possible.
+Training is not bit-wise reproducible because of cuDNN autotuning and
+non-deterministic backward reductions. Across 11 pairs of identical runs, the
+difference in a fold's test MCC between the two runs had a standard deviation
+of 0.0085. Compare arms within one run where possible.
 
 ## Layout
 
